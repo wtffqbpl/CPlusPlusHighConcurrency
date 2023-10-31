@@ -25,9 +25,9 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_FLAGS "-std=c++2a")
 enable_testing()
 
-add_executable(cpp_high_concurrency)
 file(GLOB_RECURSE srcs ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cc)
-target_sources(cpp_high_concurrency PUBLIC ${srcs})
+add_executable(cpp_high_concurrency ${srcs})
+# target_sources(cpp_high_concurrency PUBLIC ${srcs})
 
 target_link_libraries(cpp_high_concurrency GTest::gtest_main)
 
