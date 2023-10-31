@@ -7,7 +7,7 @@
 
 namespace {
 
-#define MAX_THREAD_NUM    (10)
+constexpr int MAX_THREAD_NUM = 10;
 
 std::timed_mutex mtx;          // locks access to counter
 
@@ -31,7 +31,7 @@ TEST(time_mutex, demo) {
     threads.reserve(MAX_THREAD_NUM);
 
     for (int thIdx = 0; thIdx < MAX_THREAD_NUM; ++thIdx) {
-        threads.push_back(std::thread(fireworks));
+        threads.emplace_back(fireworks);
     }
 
     for (auto& th: threads) th.join();
