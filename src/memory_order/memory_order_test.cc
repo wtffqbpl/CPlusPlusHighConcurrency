@@ -248,6 +248,69 @@ int test() {
 
   return z.load();
 }
+
+void write_x_then_y() {
+  x.store(true, std::memory_order_relaxed);
+  // 这里y.store 时不能写成 std::memory_order_relaxed，是因为这里需要保证
+  // y.store 一定在 x.store 的后面发生, 这里不能进行重排
+  y.store(true, std::memory_order_release);
+}
+
+void read_y_then_x_2() {
+  while (!y.load(std::memory_order_acquire));
+  if (x.load(std::memory_order_relaxed))
+    ++z;
+}
+
+int test2() {
+  x = false;
+  y = false;
+  z = 0;
+  std::thread a(write_x_then_y);
+  std::thread b(read_y_then_x_2);
+
+  a.join();
+  b.join();
+
+  return z.load();
+}
+
+std::atomic<int> data[5];
+std::atomic<bool> sync1(false), sync2(false);
+
+void thread_1() {
+  data[0].store(42, std::memory_order_relaxed);
+  data[1].store(97, std::memory_order_relaxed);
+  data[2].store(17, std::memory_order_relaxed);
+  data[3].store(-141, std::memory_order_relaxed);
+  data[4].store(2003, std::memory_order_release);
+  sync1.store(true, std::memory_order_release);
+}
+
+void thread_2() {
+  while (!sync1.load(std::memory_order_acquire));
+  sync2.store(true, std::memory_order_release);
+}
+
+void thread_3() {
+  while (!sync2.load(std::memory_order_acquire));
+
+  assert(data[0].load(std::memory_order_acquire) == 42);
+  assert(data[1].load(std::memory_order_acquire) == 97);
+  assert(data[2].load(std::memory_order_acquire) == 17);
+  assert(data[3].load(std::memory_order_acquire) == -141);
+  assert(data[4].load(std::memory_order_acquire) == 2003);
+}
+
+void test_3() {
+  std::thread t1(thread_1);
+  std::thread t2(thread_2);
+  std::thread t3(thread_3);
+
+  t1.join();
+  t2.join();
+  t3.join();
+}
 }
 
 }
@@ -287,4 +350,14 @@ TEST(memory_order_test, acquire_release_order_test1) {
   auto value_z = acquire_release_memory_order::test();
 
   std::cout << "value z: " << value_z << std::endl;
+}
+
+TEST(memory_order_test, acquire_release_order_test2) {
+  auto value_z = acquire_release_memory_order::test2();
+
+  EXPECT_NE(value_z, 0);
+}
+
+TEST(memory_order_test, acquire_release_order_test3) {
+  acquire_release_memory_order::test_3();
 }
