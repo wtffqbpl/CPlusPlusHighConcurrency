@@ -400,6 +400,70 @@ void test1() {
 
 }
 
+namespace memory_barrier {
+
+std::atomic<bool> x, y;
+std::atomic<int> z;
+
+void write_x_then_y() {
+  x.store(true, std::memory_order_relaxed);
+  // Release fence synchronizes with the acquire fence
+  std::atomic_thread_fence(std::memory_order_release);
+  y.store(true, std::memory_order_relaxed);
+}
+
+void read_y_then_x() {
+  while (!y.load(std::memory_order_relaxed));
+  // Acquire fence
+  std::atomic_thread_fence(std::memory_order_acquire);
+  if (x.load(std::memory_order_relaxed))
+    ++z;
+}
+
+int test1() {
+  x = false;
+  y = false;
+  z = 0;
+
+  std::thread a(write_x_then_y);
+  std::thread b(read_y_then_x);
+
+  a.join();
+  b.join();
+
+  return z.load();
+}
+
+bool x_ordinary = false;
+
+void write_x_ordinary_then_y() {
+  x = true;
+  std::atomic_thread_fence(std::memory_order_release);
+  y.store(true, std::memory_order_relaxed);
+}
+
+void read_y_then_x_ordinary() {
+  while (!y.load(std::memory_order_relaxed));
+  std::atomic_thread_fence(std::memory_order_acquire);
+  if (x) ++z;
+}
+
+int test2() {
+  x = false;
+  y = false;
+  z = 0;
+
+  std::thread a(write_x_ordinary_then_y);
+  std::thread b(read_y_then_x_ordinary);
+
+  a.join();
+  b.join();
+
+  return z.load();
+}
+
+}
+
 }
 
 TEST(memory_order_test, relaxed_test1) {
@@ -455,4 +519,24 @@ TEST(memory_order_test, acquire_release_order_test4) {
 
 TEST(memory_order_test, release_sequence_test1) {
   release_sequence::test1();
+}
+
+TEST(memory_order_test, memory_barrier_test1) {
+  auto value_z = memory_barrier::test1();
+
+#ifndef NDEBUG
+  std::cout << "value z: " << value_z << std::endl;
+#endif
+
+  EXPECT_NE(value_z, 0);
+}
+
+TEST(memory_order_test, memory_barrier_test2) {
+  auto value_z = memory_barrier::test2();
+
+#ifndef NDEBUG
+  std::cout << "value z: " << value_z << std::endl;
+#endif
+
+  EXPECT_EQ(value_z, 1);
 }
