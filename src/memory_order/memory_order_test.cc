@@ -4,6 +4,7 @@
 #include <iostream>
 #include <iterator>
 #include <thread>
+#include <vector>
 
 namespace {
 
@@ -311,6 +312,92 @@ void test_3() {
   t2.join();
   t3.join();
 }
+
+std::atomic<int> sync_flag(0);
+void thread_1_1() {
+  data[0].store(42, std::memory_order_relaxed);
+  data[1].store(97, std::memory_order_relaxed);
+  data[2].store(17, std::memory_order_relaxed);
+  data[3].store(-141, std::memory_order_relaxed);
+  data[4].store(2003, std::memory_order_release);
+
+  // update atomic variable
+  sync_flag.store(1, std::memory_order_release);
+}
+
+void thread_2_1() {
+  int expected = 1;
+  while (!sync_flag.compare_exchange_strong(expected, 2,
+                                            std::memory_order_acq_rel))
+    expected = 1;
+}
+
+void thread_3_1() {
+  while (sync_flag.load(std::memory_order_acquire) < 2);
+
+  assert(data[0].load(std::memory_order_acquire) == 42);
+  assert(data[1].load(std::memory_order_acquire) == 97);
+  assert(data[2].load(std::memory_order_acquire) == 17);
+  assert(data[3].load(std::memory_order_acquire) == -141);
+  assert(data[4].load(std::memory_order_acquire) == 2003);
+}
+
+void test_4() {
+  std::thread t1(thread_1_1);
+  std::thread t2(thread_2_1);
+  std::thread t3(thread_3_1);
+
+  t1.join();
+  t2.join();
+  t3.join();
+}
+}
+
+namespace release_sequence {
+
+std::vector<int> queue_data;
+std::atomic<int> count;
+
+void populate_queue() {
+  int const number_of_items = 20;
+  queue_data.clear();
+
+  for (int i = 0; i < number_of_items; ++i) {
+    queue_data.push_back(i);
+  }
+
+  count.store(number_of_items, std::memory_order_release);
+}
+
+void process(int thread_id, int data) {
+  std::cout << "thread_id: " << thread_id
+            << ", consume data: " << data << std::endl;
+  std::flush(std::cout);
+}
+
+void consume_queue_items(int thread_id) {
+  while (true) {
+    int item_index;
+
+    if ((item_index = count.fetch_sub(1, std::memory_order_acquire)) <= 0) {
+      break;
+      // wait_for_more_items();
+    }
+    process(thread_id, queue_data[item_index - 1]);
+    std::this_thread::sleep_for(std::chrono::microseconds(500));
+  }
+}
+
+void test1() {
+  std::thread a(populate_queue);
+  std::thread b(consume_queue_items, 0);
+  std::thread c(consume_queue_items, 1);
+
+  a.join();
+  b.join();
+  c.join();
+}
+
 }
 
 }
@@ -360,4 +447,12 @@ TEST(memory_order_test, acquire_release_order_test2) {
 
 TEST(memory_order_test, acquire_release_order_test3) {
   acquire_release_memory_order::test_3();
+}
+
+TEST(memory_order_test, acquire_release_order_test4) {
+  acquire_release_memory_order::test_4();
+}
+
+TEST(memory_order_test, release_sequence_test1) {
+  release_sequence::test1();
 }
