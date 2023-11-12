@@ -93,10 +93,10 @@ void thread_b() {
 
 void hierarchical_mutex_test1() {
   std::thread tha(thread_a);
-  std::thread thb(thread_b);
+  // std::thread thb(thread_b);
 
   if (tha.joinable()) tha.join();
-  if (thb.joinable()) thb.join();
+  // if (thb.joinable()) thb.join();
 }
 
 }

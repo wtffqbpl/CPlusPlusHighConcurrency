@@ -23,6 +23,40 @@ void f2(int &n) {
   }
 }
 
+struct func;
+
+class scoped_thread {
+public:
+  explicit scoped_thread(std::thread t_)
+      : t(std::move(t_))
+  {
+    if (!t.joinable())
+      throw std::logic_error("No thread");
+  }
+
+  ~scoped_thread() {
+    t.join();
+  }
+
+  scoped_thread(scoped_thread const &) = delete;
+  scoped_thread& operator=(scoped_thread const &) = delete;
+
+private:
+  std::thread t;
+};
+
+struct func {
+  int &i;
+  explicit func(int &i_) : i(i_) {}
+
+  void operator()() {
+    for (auto j = 0; j < 1000000; ++j) {
+      // do_something(j);
+    }
+  }
+};
+
+
 }
 
 TEST(thread_construction, demo) {
