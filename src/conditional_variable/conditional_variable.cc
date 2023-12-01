@@ -60,7 +60,7 @@ std::atomic<bool> data_ready{false};
 void waiting_for_work() {
   std::cout << "Waiting " << std::endl;
 
-  while (data_ready.load()) {
+  while (!data_ready.load(std::memory_order_acquire)) {
     std::this_thread::sleep_for(std::chrono::milliseconds(5));
   }
 
@@ -71,6 +71,7 @@ void waiting_for_work() {
 void set_data_ready() {
   my_shared_work = {1, 0, 3};
   data_ready = true;
+  data_ready.store(true, std::memory_order_release);
   std::cout << "Data prepared" << std::endl;
 }
 
