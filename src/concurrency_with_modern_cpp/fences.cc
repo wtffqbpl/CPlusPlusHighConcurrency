@@ -4,6 +4,8 @@
 #include <thread>
 #include <iostream>
 #include <string>
+#include <cassert>
+#include <csignal>
 
 namespace memory_order_utils {
 
@@ -76,4 +78,26 @@ TEST(fences_test, test2) {
   t2.join();
 
   std::cout << std::endl;
+}
+
+namespace signal_fence_utils {
+
+std::atomic<bool> a{false};
+std::atomic<bool> b{false};
+
+extern "C" void handler(int) {
+  if (a.load(std::memory_order_relaxed)) {
+    std::atomic_signal_fence(std::memory_order_acquire);
+    assert(b.load(std::memory_order_relaxed));
+  }
+}
+
+}
+
+TEST(fences_test, signal_fence_test1) {
+  std::signal(SIGTERM, signal_fence_utils::handler);
+
+  signal_fence_utils::b.store(true, std::memory_order_relaxed);
+  std::atomic_signal_fence(std::memory_order_release);
+  signal_fence_utils::a.store(true, std::memory_order_relaxed);
 }
