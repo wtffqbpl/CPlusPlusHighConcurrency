@@ -375,3 +375,87 @@ TEST(shared_lock_test, test1) {
 
   std::cout << std::endl;
 }
+
+namespace thread_safe_cases {
+
+struct MyDouble {
+public:
+  double my_val1;
+  double my_val2;
+
+public:
+  constexpr MyDouble(double v1, double v2) : my_val1(v1), my_val2(v2) {}
+  [[nodiscard]] constexpr double get_sum() const { return my_val1 + my_val2; }
+};
+
+// std::call_once
+std::once_flag once_flag;
+
+void do_once() {
+  std::call_once(once_flag, [] () { std::cout << "Only once. " << std::endl; });
+}
+
+void do_once2() {
+  std::call_once(once_flag, [] () { std::cout << "only once2." << std::endl; });
+}
+
+class SingletonOnceFlag {
+private:
+  static std::once_flag init_instance_flag;
+  static SingletonOnceFlag *instance;
+
+  SingletonOnceFlag() = default;
+  ~SingletonOnceFlag() = default;
+
+public:
+  SingletonOnceFlag(const SingletonOnceFlag&) = delete;
+  SingletonOnceFlag &operator=(const SingletonOnceFlag&) = delete;
+
+  static SingletonOnceFlag *get_instance() {
+    std::call_once(init_instance_flag, SingletonOnceFlag::init_singleton);
+    return instance;
+  }
+
+  static void init_singleton() {
+    instance = new SingletonOnceFlag();
+  }
+};
+
+SingletonOnceFlag *SingletonOnceFlag::instance = nullptr;
+std::once_flag SingletonOnceFlag::init_instance_flag;
+
+} // namespace thread_safe_cases
+
+TEST(thread_safe_test, test1) {
+  using namespace thread_safe_cases;
+
+  constexpr double my_stat_val = 2.0;
+  constexpr MyDouble my_static(10.5, my_stat_val);
+  constexpr double sum_stat = my_static.get_sum();
+
+  std::cout << "my_stat_val: " << my_stat_val << '\n'
+            << "my_static: {" << my_static.my_val1 << ", " << my_static.my_val2 << "}\n"
+            << "sum_stat: " << sum_stat << '\n';
+}
+
+TEST(thread_safe_test, test2) {
+  using namespace thread_safe_cases;
+  std::thread t1(do_once);
+  std::thread t2(do_once);
+  std::thread t3(do_once2);
+  std::thread t4(do_once2);
+
+  t1.join();
+  t2.join();
+  t3.join();
+  t4.join();
+}
+
+TEST(thread_safe_test, singleton_test) {
+  using namespace thread_safe_cases;
+
+  std::cout << "SingletonOnceFlag::get_instance(): " << SingletonOnceFlag::get_instance() << std::endl;
+  std::cout << "SingletonOnceFlag::get_instance(): " << SingletonOnceFlag::get_instance() << std::endl;
+
+  std::cout << std::endl;
+}
