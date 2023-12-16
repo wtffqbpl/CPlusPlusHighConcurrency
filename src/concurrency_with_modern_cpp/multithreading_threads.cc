@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <mutex>
+#include <shared_mutex>
 #include <thread>
 #include <utility>
 
@@ -257,6 +259,30 @@ void dead_lock(critical_data &a, critical_data &b) {
   // do something with a and b
 }
 
+struct bank_account {
+  explicit bank_account(std::string name_, int money_)
+      : name(std::move(name_)), money(money_)
+  {}
+
+  std::string name;
+  int money;
+  std::mutex mux;
+};
+
+void transfer(bank_account &from, bank_account &to, int amount) {
+  std::unique_lock<std::mutex> lk1(from.mux, std::defer_lock); // std::defer_lock 表示延迟加锁，此处只管理mutex
+  std::unique_lock<std::mutex> lk2(to.mux, std::defer_lock);
+
+  std::lock(lk1, lk2); // lock一次性可以锁住多个 mutex 防止 deadlock
+  from.money -= amount;
+  to.money += amount;
+
+  std::cout << "Transfer " << amount << " "
+            << "from " << from.name << " "
+            << "to " << to.name
+            << std::endl;
+}
+
 } // namespace unique_lock_utils
 
 TEST(unique_lock_test, test1) {
@@ -270,6 +296,82 @@ TEST(unique_lock_test, test1) {
 
   t1.join();
   t2.join();
+
+  std::cout << std::endl;
+}
+
+TEST(unique_lock_test, bank_transfer_case) {
+  using namespace unique_lock_utils;
+
+  bank_account acc1("User1", 100);
+  bank_account acc2("User2", 50);
+
+  std::thread t1([&] () { transfer(acc1, acc2, 10); });
+  std::thread t2([&] () { transfer(acc2, acc1, 5); });
+
+  t1.join();
+  t2.join();
+}
+
+namespace shared_lock_utils {
+
+std::map<std::string, int> tele_book{{"Dijkstra", 1972}, {"Scott", 1976},
+                                     {"Ritchie", 1983}};
+
+std::shared_timed_mutex tele_book_mutex;
+
+void add_to_tele_book(const std::string &name, int tele) {
+  std::lock_guard<std::shared_timed_mutex> writer_lock(tele_book_mutex);
+  std::cout << "\nSTARTING UPDATE " << name;
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(500));
+  tele_book[name] = tele;
+  std::cout << " ... ENDING UPDATE " << name << std::endl;
+}
+
+void print_number(const std::string &name) {
+  std::shared_lock<std::shared_timed_mutex> reader_lock(tele_book_mutex);
+  std::cout << name << ": " << tele_book[name];
+}
+
+} // namespace shared_lock_utils
+
+TEST(shared_lock_test, test1) {
+  std::cout << std::endl;
+
+  using namespace shared_lock_utils;
+
+  std::thread reader1([] { print_number("Scott"); });
+  std::thread reader2([] { print_number("Ritchie"); });
+  std::thread w1([] { add_to_tele_book("Scott", 1968); });
+  std::thread reader3([] { print_number("Dijkstra"); });
+  std::thread reader4([] { print_number("Scott"); });
+
+  std::thread w2([] { add_to_tele_book("Bjarne", 1965); });
+  std::thread reader5([] { print_number("Scott"); });
+  std::thread reader6([] { print_number("Ritchie"); });
+  std::thread reader7([] { print_number("Scott"); });
+  std::thread reader8([] { print_number("Bjarne"); });
+
+  reader1.join();
+  reader2.join();
+  reader3.join();
+  reader4.join();
+  reader5.join();
+  reader6.join();
+  reader7.join();
+  reader8.join();
+
+  w1.join();
+  w2.join();
+
+  std::cout << std::endl;
+
+  std::cout << "\nThe new telephone book" << std::endl;
+  for (auto &tele_item : tele_book)
+  {
+    std::cout << tele_item.first << ": " << tele_item.second << std::endl;
+  }
 
   std::cout << std::endl;
 }
