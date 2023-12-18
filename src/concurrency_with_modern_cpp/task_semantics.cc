@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <exception>
 #include <chrono>
 #include <future>
 #include <thread>
@@ -525,4 +526,47 @@ TEST(promise_future_test, wait_for_test) {
 TEST(promise_future_test, shared_future_test) {
   using namespace promise_future_utils;
   shared_future_case();
+}
+
+namespace exceptions_util {
+
+struct Div {
+  void operator()(std::promise<int> &&int_promise, int a, int b) {
+    try {
+      if (b == 0) {
+        std::string err_message = std::string("illegal division by zero: ") +
+                                  std::to_string(a) + "/" + std::to_string(b);
+        throw std::runtime_error(err_message);
+      }
+      int_promise.set_value(a / b);
+    } catch (...) {
+      int_promise.set_exception(std::current_exception());
+    }
+  }
+};
+
+void execute_division(int nom, int denom) {
+  std::promise<int> div_promise;
+  std::future<int> div_result = div_promise.get_future();
+
+  Div div{};
+  std::thread div_thread(div, std::move(div_promise), nom, denom);
+
+  // get the result or the exception
+  try {
+    std::cout << nom << " / " << denom << " = " << div_result.get() << std::endl;
+  } catch (std::runtime_error &e) {
+    std::cout << e.what() << std::endl;
+  }
+
+  div_thread.join();
+}
+
+} // namespace exceptions_util
+
+TEST(task_exception_test, test1) {
+  using namespace exceptions_util;
+
+  execute_division(20, 0);
+  execute_division(20, 10);
 }
