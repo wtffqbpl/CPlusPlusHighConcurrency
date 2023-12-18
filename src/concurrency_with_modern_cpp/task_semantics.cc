@@ -393,3 +393,136 @@ TEST(packaged_task_test, reset_example) {
 
   packaged_task_reset_example();
 }
+
+namespace promise_future_utils {
+void product(std::promise<int> &&int_promise, int a, int b) {
+  int_promise.set_value(a * b);
+}
+
+struct Div {
+  void operator()(std::promise<int> &&int_promise, int a, int b) const {
+    int_promise.set_value(a / b);
+  }
+};
+
+void promise_example() {
+  int a = 20;
+  int b = 10;
+
+  // define the promises
+  std::promise<int> prod_promise;
+  std::promise<int> div_promise;
+
+  // get the futures
+  std::future<int> prod_result = prod_promise.get_future();
+  std::future<int> div_result = div_promise.get_future();
+
+  // calculate the result in a separate thread
+  std::thread prod_thread(product, std::move(prod_promise), a, b);
+  Div div;
+  std::thread div_thread(div, std::move(div_promise), a, b);
+
+  // get the result
+  std::cout << "20 * 10 = " << prod_result.get() << std::endl;
+  std::cout << "20 / 10 = " << div_result.get() << std::endl;
+
+  prod_thread.join();
+  div_thread.join();
+}
+
+// std::promise enables you to set a value, a notification, or an exception.
+// In addition, the promise can provide its result in a delayed fashion.
+// If the promise sets the value or the exception more than once, a
+// std::future_error exception is thrown.
+//
+// A std::future enables you to
+//  * pick up the value from the promise.
+//  * ask the promise if the value is available.
+//  * wait for the notification of the promise. This waiting can be done with
+//    a relative time duration or an absolute time point.
+//  * create a shared future (std::shared_future).
+
+using namespace std::chrono_literals;
+
+void get_answer(std::promise<int> int_promise) {
+
+  std::this_thread::sleep_for(3s);
+  int_promise.set_value(42);
+}
+
+void wait_for_test() {
+  std::promise<int> answer_promise;
+  auto fut = answer_promise.get_future();
+
+  std::thread prod_thread(get_answer, std::move(answer_promise));
+
+  std::future_status status{};
+
+  do {
+    status = fut.wait_for(0.2s);
+    std::cout << "... doing something else" << std::endl;
+  } while (status != std::future_status::ready);
+
+  std::cout << "The answer: " << fut.get() << '\n';
+  prod_thread.join();
+}
+
+std::mutex cout_mtx;
+
+struct Requestor {
+  void operator()(const std::shared_future<int> &shared_fut) {
+
+    // lock std::cout
+    std::lock_guard<std::mutex> cout_guard(cout_mtx);
+
+    // get the thread id
+    std::cout << "threadId(" << std::this_thread::get_id() << "): ";
+    std::cout << "20/10 = " << shared_fut.get() << std::endl;
+  }
+};
+
+void shared_future_case() {
+  // define the promise
+  std::promise<int> div_promise;
+
+  // get the futures
+  std::shared_future<int> div_result = div_promise.get_future();
+
+  // calculate the result in a separate thread
+  Div div;
+  std::thread div_thread(div, std::move(div_promise), 20, 10);
+
+  Requestor req;
+  std::thread shared_thread1(req, div_result);
+  std::thread shared_thread2(req, div_result);
+  std::thread shared_thread3(req, div_result);
+  std::thread shared_thread4(req, div_result);
+  std::thread shared_thread5(req, div_result);
+
+  div_thread.join();
+
+  shared_thread1.join();
+  shared_thread2.join();
+  shared_thread3.join();
+  shared_thread4.join();
+  shared_thread5.join();
+}
+
+} // namespace promise_future_utils
+
+TEST(promise_future_test, example1) {
+  using namespace promise_future_utils;
+
+  promise_example();
+}
+
+TEST(promise_future_test, wait_for_test) {
+  using namespace promise_future_utils;
+
+  wait_for_test();
+}
+
+TEST(promise_future_test, shared_future_test) {
+  using namespace promise_future_utils;
+  shared_future_case();
+}

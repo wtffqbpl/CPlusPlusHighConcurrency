@@ -19,7 +19,6 @@ void waiting_for_work() {
 
   std::unique_lock<std::mutex> lck(mutex_);
   cond_var.wait(lck, [] { return data_ready; });
-  data_ready = false;
   do_the_work();
   std::cout << "Work done." << std::endl;
 }
@@ -41,11 +40,9 @@ TEST(condition_varaibles_test, test1) {
 
   std::thread t1(waiting_for_work);
   std::thread t2(set_data_ready);
-  std::thread t3(waiting_for_work);
 
   t1.join();
   t2.join();
-  t3.join();
 
   std::cout << std::endl;
 }
