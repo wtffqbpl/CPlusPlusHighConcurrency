@@ -488,6 +488,9 @@ void shared_future_case() {
 
   // get the futures
   std::shared_future<int> div_result = div_promise.get_future();
+  // std::promise::get_future 的返回值为std::future, 而这里设置为
+  // std::shared_future<int> 的返回类型, 得到的过程是因为调用了
+  // shared_future(std::future<int> &fut) 这个构造函数的原因。
 
   // calculate the result in a separate thread
   Div div;
@@ -509,6 +512,33 @@ void shared_future_case() {
   shared_thread5.join();
 }
 
+void do_the_work() {
+  std::cout << "Processing shared data." << std::endl;
+}
+
+void waiting_for_work(std::future<void> &&fut) {
+  std::cout << "Worker: Waiting for work." << std::endl;
+  fut.wait();
+  do_the_work();
+  std::cout << "Work done." << std::endl;
+}
+
+void set_data_ready(std::promise<void> &&prom) {
+  std::cout << "Sender: Data is ready." << std::endl;
+  prom.set_value();
+}
+
+void synchronisation_with_promise_and_future() {
+  std::promise<void> send_ready;
+  auto fut = send_ready.get_future();
+
+  std::thread t1(waiting_for_work, std::move(fut));
+  std::thread t2(set_data_ready, std::move(send_ready));
+
+  t1.join();
+  t2.join();
+}
+
 } // namespace promise_future_utils
 
 TEST(promise_future_test, example1) {
@@ -526,6 +556,12 @@ TEST(promise_future_test, wait_for_test) {
 TEST(promise_future_test, shared_future_test) {
   using namespace promise_future_utils;
   shared_future_case();
+}
+
+TEST(promise_future_test, synchronize_test) {
+  using namespace promise_future_utils;
+
+  synchronisation_with_promise_and_future();
 }
 
 namespace exceptions_util {
