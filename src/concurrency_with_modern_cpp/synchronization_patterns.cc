@@ -244,3 +244,65 @@ TEST(synchronization_patterns, test4) {
 
   test_strategized_locking();
 }
+
+namespace thread_safe_interface {
+
+// This is the simple and straightforward idea:
+// 1. All interface methods(public) should use a lock.
+// 2. All implementation methods (protected and private) must not use a lock.
+// 3. The interface methods call only protected or private methods but no public methods.
+
+class Critical {
+public:
+  void interface1() const {
+    std::lock_guard<std::mutex> lock_guard(mut);
+    implementation1();
+  }
+
+  void interface2() const {
+    std::lock_guard<std::mutex> lock_guard(mut);
+    implementation2();
+    implementation3();
+    implementation1();
+  }
+
+private:
+  void implementation1() const {
+    std::cout << "implementation1: " << std::this_thread::get_id() << std::endl;
+  }
+
+  void implementation2() const {
+    std::cout << "implementation2: " << std::this_thread::get_id() << std::endl;
+  }
+
+  void implementation3() const {
+    std::cout << "implementation3: " << std::this_thread::get_id() << std::endl;
+  }
+
+private:
+  mutable std::mutex mut;
+};
+
+} // namespace thread_safe_interface
+
+TEST(synchronization_patterns, thread_safe_design_test) {
+  using namespace thread_safe_interface;
+
+  std::thread t1([] {
+    const Critical crit;
+    crit.interface1();
+  });
+
+  std::thread t2([] {
+    Critical crit;
+    crit.interface2();
+    crit.interface1();
+  });
+
+  Critical crit;
+  crit.interface1();
+  crit.interface2();
+
+  t1.join();
+  t2.join();
+}
