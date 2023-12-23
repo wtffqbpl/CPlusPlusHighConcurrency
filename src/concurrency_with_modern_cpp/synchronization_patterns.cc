@@ -251,6 +251,15 @@ namespace thread_safe_interface {
 // 1. All interface methods(public) should use a lock.
 // 2. All implementation methods (protected and private) must not use a lock.
 // 3. The interface methods call only protected or private methods but no public methods.
+//
+// The benefits of the thread-safe interface are threefold:
+// 1. A recursive call of a mutex is not possible. Recursive calls on a non-recursive
+//    mutex are undefined behaviour in C++ and usually end in a deadlock.
+// 2. The program uses minimal locking and, therefore, minimal synchronization.
+//    Using just a std::recursive_mutex in each public or private method of the
+//    class Critical would end in more expensive synchronizations.
+// 3. From the user perspective, Critical is straightforward to use because
+//    the synchronization is only an implementation detail.
 
 class Critical {
 public:
@@ -305,4 +314,30 @@ TEST(synchronization_patterns, thread_safe_design_test) {
 
   t1.join();
   t2.join();
+}
+
+class Base {
+public:
+  virtual void interface() {
+    std::lock_guard<std::mutex> lock_guard(mut);
+    std::cout << "Base with lock" << std::endl;
+  }
+
+private:
+  std::mutex mut;
+};
+
+class Derived : public Base {
+  void interface() override {
+    std::cout << "Derived without lock" << std::endl;
+  }
+};
+
+TEST(virtuality_issue, test) {
+  Base *base1 = new Derived;
+  base1->interface();
+
+  Derived der;
+  Base &base2 = der;
+  base2.interface();
 }
