@@ -341,3 +341,28 @@ TEST(virtuality_issue, test) {
   Base &base2 = der;
   base2.interface();
 }
+
+namespace guarded_suspension_utils {
+// A guarded suspension is its basic variant a combination of a lock and a
+// precondition that must be satisfied. If the precondition is not fulfilled,
+// that calling thread puts itself to sleep. To avoid a race condition which
+// may result in a data race or a deadlock, the checking thread uses a lock.
+//
+// Now, the various variants exist:
+// 1. The waiting thread can be passively notified about the state change, or
+//    actively ask for the state change. In short, I call this push versus pull principle.
+// 2. The waiting can be done with or without a time boundary.
+// 3. The notification can be sent to one or all waiting threads.
+
+// Push versus Pull Principle
+// Most of the time, you use a condition variable or a future/promise pair to
+// synchronise threads. The condition variable or the promise send the notification
+// to the waiting thread. A promise has no `notify_one` or `notify_all` method.
+// Instead, an empty `set_value` call is typically used to simulate a notification.
+//
+// Condition variables
+
+namespace condition_variables_utils {
+} // namespace condition_variables_utils
+
+} // namespace guarded_suspension_utils
